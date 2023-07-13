@@ -18,5 +18,8 @@ fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024]; // Create a mutable buffer of size 1024 bytes
 
     stream.read(&mut buffer).unwrap(); // Read data from the stream and store it in the buffer
-    println!("Request: {}", String::from_utf8_lossy(&buffer[..])); // Print the request received as a string
+   
+   let response = "HTTP/1.1 200 OK\r\n\r\n";
+   stream.write(response.as_bytes()).unwrap();
+   stream.flush().unwrap();
 }
