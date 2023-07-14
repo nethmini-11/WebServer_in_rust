@@ -20,7 +20,7 @@ fn handle_connection(mut stream: TcpStream) {
 
     stream.read(&mut buffer).unwrap(); // Read data from the stream and store it in the buffer
 
-    let get =b"GET /HTTP/1.1\r\n";
+    let get =b"GET / HTTP/1.1\r\n";
     if buffer.starts_with(get){
         let contents = fs::read_to_string("index.html").unwrap();
    
