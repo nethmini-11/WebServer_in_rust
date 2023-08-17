@@ -18,34 +18,41 @@ fn main() {
         // Get the TcpStream from the incoming connection
         let stream = stream.unwrap();
 
-        pool.execute(||{
+        pool.execute(|| {
             handle_connection(stream);
         });
-       
     }
 }
+
 fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024]; // Create a mutable buffer of size 1024 bytes
 
     stream.read(&mut buffer).unwrap(); // Read data from the stream and store it in the buffer
 
     let get = b"GET / HTTP/1.1\r\n";
-    let sleep =b"GET /sleep HTTP/1.1\r\n";
+    let health = b"GET /health HTTP/1.1\r\n";
+    let api_shipping_orders = b"GET /api/shipping/orders HTTP/1.1\r\n";
+    let sleep = b"GET /sleep HTTP/1.1\r\n";
 
-    let (status_line, filename) = if buffer.starts_with(get) {
-        ("HTTP/1.1 200 OK", "index.html")
-    } else if buffer.starts_with(sleep){
+    let (status_line, filename, content_type) = if buffer.starts_with(get) {
+        ("HTTP/1.1 200 OK", "index.html", "text/html")
+    } else if buffer.starts_with(health) {
+        ("HTTP/1.1 200 OK", "health.json", "application/json")
+    } else if buffer.starts_with(api_shipping_orders) {
+        ("HTTP/1.1 200 OK", "shipping_orders.json", "application/json")
+    } else if buffer.starts_with(sleep) {
         thread::sleep(Duration::from_secs(5));
-        ("HTTP/1.1 200 OK", "index.html")
-    }else {
-        ("HTTP/1.1 404 NOT FOUND", "404.html")
+        ("HTTP/1.1 200 OK", "index.html", "text/html")
+    } else {
+        ("HTTP/1.1 404 NOT FOUND", "404.html", "text/html")
     };
 
     let contents = fs::read_to_string(filename).unwrap();
 
     let response = format!(
-        "{}\r\nContent-Length: {}\r\n\r\n{}",
+        "{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
         status_line,
+        content_type,
         contents.len(),
         contents
     );
