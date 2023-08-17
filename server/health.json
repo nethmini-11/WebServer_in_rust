@@ -1,0 +1,53 @@
+[
+    {
+      "service": "web",
+      "status": "healthy",
+      "message": "Server is up and running"
+    },
+    {
+      "service": "database",
+      "status": "healthy",
+      "message": "Database connection established"
+    },
+    {
+      "service": "cache",
+      "status": "healthy",
+      "message": "Cache server is operational"
+    },
+    {
+      "service": "email",
+      "status": "healthy",
+      "message": "Email service is working"
+    },
+    {
+      "service": "payment",
+      "status": "healthy",
+      "message": "Payment gateway is online"
+    },
+    {
+      "service": "search",
+      "status": "healthy",
+      "message": "Search functionality is operational"
+    },
+    {
+      "service": "analytics",
+      "status": "healthy",
+      "message": "Analytics services are running"
+    },
+    {
+      "service": "notification",
+      "status": "healthy",
+      "message": "Notification system is active"
+    },
+    {
+      "service": "authentication",
+      "status": "healthy",
+      "message": "Authentication service is up"
+    },
+    {
+      "service": "monitoring",
+      "status": "healthy",
+      "message": "Monitoring tools are functioning"
+    }
+  ]
+  
