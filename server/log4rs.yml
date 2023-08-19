@@ -1,0 +1,15 @@
+refresh_rate: 30 seconds
+
+appenders:
+  stdout:
+    kind: console
+
+  my_file:
+    kind: file
+    path: "server.log"
+
+root:
+  level: info
+  appenders:
+    - stdout
+    - my_file

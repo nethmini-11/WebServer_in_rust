@@ -1,3 +1,5 @@
+use log::{error, info};
+use log4rs;
 use std::fs;
 use std::io::prelude::*;
 use std::net::TcpListener;
@@ -12,6 +14,7 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
 
     let pool = ThreadPool::new(4);
+    log4rs::init_file("log4rs.yml", Default::default()).unwrap();
 
     // Accept incoming connections and handle each connection in a loop
     for stream in listener.incoming() {
@@ -33,20 +36,27 @@ fn handle_connection(mut stream: TcpStream) {
     let health = b"GET /health HTTP/1.1\r\n";
     let api_shipping_orders = b"GET /api/shipping/orders HTTP/1.1\r\n";
     let sleep = b"GET /sleep HTTP/1.1\r\n";
-
+    let mut error_occurred = false;
     let (status_line, filename, content_type) = if buffer.starts_with(get) {
         ("HTTP/1.1 200 OK", "index.html", "text/html")
     } else if buffer.starts_with(health) {
         ("HTTP/1.1 200 OK", "health.json", "application/json")
     } else if buffer.starts_with(api_shipping_orders) {
-        ("HTTP/1.1 200 OK", "shipping_orders.json", "application/json")
+        (
+            "HTTP/1.1 200 OK",
+            "shipping_orders.json",
+            "application/json",
+        )
     } else if buffer.starts_with(sleep) {
         thread::sleep(Duration::from_secs(5));
         ("HTTP/1.1 200 OK", "index.html", "text/html")
     } else {
         ("HTTP/1.1 404 NOT FOUND", "404.html", "text/html")
     };
-
+    if status_line.starts_with("HTTP/1.1 404") {
+        // Set the flag to true when an error occurs
+        error_occurred = true;
+    }
     let contents = fs::read_to_string(filename).unwrap();
 
     let response = format!(
@@ -58,4 +68,13 @@ fn handle_connection(mut stream: TcpStream) {
     );
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
+
+    if error_occurred {
+        error!(
+            "Resource not found for request from: {}",
+            stream.peer_addr().unwrap()
+        );
+    } else {
+        info!("Request received from: {}", stream.peer_addr().unwrap());
+    }
 }
