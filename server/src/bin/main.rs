@@ -27,54 +27,123 @@ fn main() {
     }
 }
 
+fn is_allowed_ip(peer_ip: &str) -> bool {
+    // Implement your IP access control logic here
+    // For example, check if `peer_ip` is in an allowed list
+    // Return true if allowed, false otherwise
+    // Example:
+    let allowed_ips = vec!["127.0.0.1"];
+    allowed_ips.contains(&peer_ip)
+}
+
+fn is_allowed_user(username: &str) -> bool {
+    // Implement your user account access control logic here
+    // For example, check if `username` is in an allowed list
+    // Return true if allowed, false otherwise
+    // Example:
+    let allowed_users = vec!["admin"];
+    allowed_users.contains(&username)
+}
+
 fn handle_connection(mut stream: TcpStream) {
-    let mut buffer = [0; 1024]; // Create a mutable buffer of size 1024 bytes
+    let peer_ip = stream.peer_addr().unwrap().ip().to_string();
 
-    stream.read(&mut buffer).unwrap(); // Read data from the stream and store it in the buffer
+    let mut buffer = [0; 1024];
+    if let Ok(_) = stream.read(&mut buffer) {
+        let request = String::from_utf8_lossy(&buffer);
+        let mut error_occurred = false;
 
-    let get = b"GET / HTTP/1.1\r\n";
-    let health = b"GET /health HTTP/1.1\r\n";
-    let api_shipping_orders = b"GET /api/shipping/orders HTTP/1.1\r\n";
-    let sleep = b"GET /sleep HTTP/1.1\r\n";
-    let mut error_occurred = false;
-    let (status_line, filename, content_type) = if buffer.starts_with(get) {
-        ("HTTP/1.1 200 OK", "index.html", "text/html")
-    } else if buffer.starts_with(health) {
-        ("HTTP/1.1 200 OK", "health.json", "application/json")
-    } else if buffer.starts_with(api_shipping_orders) {
-        (
-            "HTTP/1.1 200 OK",
-            "shipping_orders.json",
-            "application/json",
-        )
-    } else if buffer.starts_with(sleep) {
-        thread::sleep(Duration::from_secs(5));
-        ("HTTP/1.1 200 OK", "index.html", "text/html")
-    } else {
-        ("HTTP/1.1 404 NOT FOUND", "404.html", "text/html")
-    };
-    if status_line.starts_with("HTTP/1.1 404") {
-        // Set the flag to true when an error occurs
-        error_occurred = true;
-    }
-    let contents = fs::read_to_string(filename).unwrap();
+        let (status_line, filename, content_type, username) =
+            if request.starts_with("GET / HTTP/1.1\r\n") {
+                ("HTTP/1.1 200 OK", "index.html", "text/html", None)
+            } else if request.starts_with("GET /health HTTP/1.1\r\n") {
+                ("HTTP/1.1 200 OK", "health.json", "application/json", None)
+            } else if request.starts_with("GET /api/shipping/orders HTTP/1.1\r\n") {
+                (
+                    "HTTP/1.1 200 OK",
+                    "shipping_orders.json",
+                    "application/json",
+                    None,
+                )
+            } else if request.starts_with("GET /sleep HTTP/1.1\r\n") {
+                thread::sleep(Duration::from_secs(5));
+                ("HTTP/1.1 200 OK", "index.html", "text/html", None)
+            } else if let Some(captures) = regex::Regex::new(r"^GET /(\w+) HTTP/1.1\r\n")
+                .unwrap()
+                .captures(&request)
+            {
+                let username = captures.get(1).map(|m| m.as_str());
+                if let Some(username) = username {
+                    if is_allowed_user(username) {
+                        ("HTTP/1.1 200 OK", "index.html", "text/html", Some(username))
+                    } else {
+                        (
+                            "HTTP/1.1 403 Forbidden",
+                            "access_denied.html",
+                            "text/html",
+                            None,
+                        )
+                    }
+                } else {
+                    error_occurred = true;
+                    ("HTTP/1.1 400 Bad Request", "400.html", "text/html", None)
+                }
+            } else {
+                error_occurred = true;
+                ("HTTP/1.1 404 NOT FOUND", "404.html", "text/html", None)
+            };
 
-    let response = format!(
-        "{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
-        status_line,
-        content_type,
-        contents.len(),
-        contents
-    );
-    stream.write(response.as_bytes()).unwrap();
-    stream.flush().unwrap();
+        let contents = fs::read_to_string(filename).unwrap_or_else(|_| {
+            error_occurred = true;
+            "File not found".to_string()
+        });
 
-    if error_occurred {
-        error!(
-            "Resource not found for request from: {}",
-            stream.peer_addr().unwrap()
-        );
-    } else {
-        info!("Request received from: {}", stream.peer_addr().unwrap());
+        let response = if let Some(username) = username {
+            if is_allowed_user(username) {
+                let index_contents = fs::read_to_string("index.html").unwrap_or_else(|_| {
+                    error_occurred = true;
+                    "Index file not found".to_string()
+                });
+
+                format!(
+                    "{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+                    status_line,
+                    content_type,
+                    index_contents.len(),
+                    index_contents
+                )
+            } else {
+                let access_denied_contents = fs::read_to_string("access_denied.html")
+                    .unwrap_or_else(|_| {
+                        error_occurred = true;
+                        "Access denied file not found".to_string()
+                    });
+
+                format!(
+                    "{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+                    "HTTP/1.1 403 Forbidden",
+                    "text/html",
+                    access_denied_contents.len(),
+                    access_denied_contents
+                )
+            }
+        } else {
+            format!(
+                "{}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n{}",
+                status_line,
+                content_type,
+                contents.len(),
+                contents
+            )
+        };
+
+        stream.write(response.as_bytes()).unwrap();
+        stream.flush().unwrap();
+
+        if error_occurred {
+            error!("Resource not found for request from: {}", peer_ip);
+        } else {
+            info!("Request received from: {}", peer_ip);
+        }
     }
 }
